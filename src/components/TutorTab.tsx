@@ -120,7 +120,7 @@ export function TutorTab() {
 
       // Generate response with streaming - optimized parameters for faster response
       const { stream, result, cancel } = await TextGeneration.generateStream(contextualPrompt, {
-        maxTokens: 150, // Reduced from 300 for faster responses
+        maxTokens: 150, // Reduced for faster responses
         temperature: 0.7,
         systemPrompt: systemPrompt,
       });
@@ -341,6 +341,34 @@ export function TutorTab() {
     }
   }, [processUserInput]);
 
+  // Suggested questions for welcome screen
+  const suggestedQuestions = [
+    {
+      title: "Explain Machine Learning",
+      desc: "Learn the basics of ML and how computers learn from data"
+    },
+    {
+      title: "What is Recursion?",
+      desc: "Understand recursive thinking with examples"
+    },
+    {
+      title: "Quiz Me on Operating Systems",
+      desc: "Test your knowledge of OS concepts"
+    },
+    {
+      title: "How does the Internet work?",
+      desc: "Learn about networks, protocols, and the web"
+    }
+  ];
+
+  // Handle suggestion click
+  const handleSuggestionClick = useCallback((question: string) => {
+    setInput(question);
+    setTimeout(() => {
+      handleTextSubmit();
+    }, 100);
+  }, [handleTextSubmit]);
+
   // Which loaders are still loading?
   const pendingLoaders = [
     { label: 'VAD', loader: vadLoader },
@@ -348,6 +376,8 @@ export function TutorTab() {
     { label: 'LLM', loader: llmLoader },
     { label: 'TTS', loader: ttsLoader },
   ].filter((l) => l.loader.state !== 'ready');
+
+  const showWelcome = messages.length <= 1 && tutorState === 'idle';
 
   return (
     <div className="tab-panel tutor-panel">
@@ -365,86 +395,143 @@ export function TutorTab() {
 
       {/* Status indicator */}
       <div className="tutor-status">
-        <div className="tutor-status-indicator" data-state={tutorState}>
-          {tutorState === 'idle' && '💬'}
-          {tutorState === 'loading-models' && '⏳'}
-          {tutorState === 'listening' && '🎤'}
-          {tutorState === 'processing' && '🤔'}
-          {tutorState === 'speaking' && '🔊'}
-          {tutorState === 'awaiting-quiz-answer' && '❓'}
-        </div>
+        <div className="tutor-status-indicator" data-state={tutorState}></div>
         <span className="tutor-status-text">
           {tutorState === 'idle' && 'Ready to help!'}
           {tutorState === 'loading-models' && 'Loading AI models...'}
           {tutorState === 'listening' && 'Listening... speak your question'}
-          {tutorState === 'processing' && 'Thinking...'}
+          {tutorState === 'processing' && 'AI is thinking...'}
           {tutorState === 'speaking' && 'Speaking response...'}
           {tutorState === 'awaiting-quiz-answer' && 'Answer the quiz question above'}
         </span>
       </div>
 
-      {/* Message history */}
-      <div className="tutor-messages">
-        {messages.map((msg, i) => (
-          <div key={i} className={`tutor-message tutor-message-${msg.role}`}>
-            <div className={`tutor-message-bubble ${msg.isQuiz ? 'tutor-quiz-bubble' : ''}`}>
-              <p>{msg.text || '...'}</p>
-              {msg.isQuiz && <div className="tutor-quiz-badge">Quiz Question</div>}
-            </div>
+      {/* Welcome Screen or Messages */}
+      {showWelcome ? (
+        <div className="tutor-welcome">
+          <div className="tutor-welcome-icon">🎓</div>
+          <h2>Welcome to AI Tutor</h2>
+          <p>Your personal AI learning assistant. Ask me anything or choose a topic below to get started!</p>
+          
+          <div className="tutor-suggestions">
+            {suggestedQuestions.map((suggestion, idx) => (
+              <div 
+                key={idx} 
+                className="tutor-suggestion-card"
+                onClick={() => handleSuggestionClick(suggestion.title)}
+              >
+                <h4>{suggestion.title}</h4>
+                <p>{suggestion.desc}</p>
+              </div>
+            ))}
           </div>
-        ))}
-        {isGenerating && tutorState === 'processing' && (
-          <div className="tutor-message tutor-message-assistant">
-            <div className="tutor-message-bubble tutor-typing">
-              <span></span><span></span><span></span>
+        </div>
+      ) : (
+        <div className="tutor-messages">
+          {messages.map((msg, i) => (
+            <div key={i} className={`tutor-message tutor-message-${msg.role}`}>
+              <div className="tutor-message-avatar">
+                {msg.role === 'user' ? '👤' : '🤖'}
+              </div>
+              <div className={`tutor-message-bubble ${msg.isQuiz ? 'tutor-quiz-bubble' : ''}`}>
+                {msg.text ? (
+                  <div dangerouslySetInnerHTML={{ 
+                    __html: msg.text
+                      .replace(/\n/g, '<br/>')
+                      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                      .replace(/`(.*?)`/g, '<code>$1</code>')
+                  }} />
+                ) : (
+                  <span style={{ opacity: 0.5 }}>...</span>
+                )}
+                {msg.isQuiz && <div className="tutor-quiz-badge">📝 Quiz Question</div>}
+              </div>
             </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+          ))}
+          {isGenerating && tutorState === 'processing' && (
+            <div className="tutor-message tutor-message-assistant">
+              <div className="tutor-message-avatar">🤖</div>
+              <div className="tutor-message-bubble tutor-typing">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      )}
 
       {/* Quick actions */}
       <div className="tutor-quick-actions">
-        <button className="btn btn-sm" onClick={() => handleQuickAction('example')} disabled={isGenerating}>
-          📝 Example
+        <button className="tutor-quick-btn" onClick={() => handleQuickAction('example')} disabled={isGenerating || showWelcome}>
+          <span className="tutor-quick-btn-icon">📝</span> Example
         </button>
-        <button className="btn btn-sm" onClick={() => handleQuickAction('simpler')} disabled={isGenerating}>
-          💡 Simpler
+        <button className="tutor-quick-btn" onClick={() => handleQuickAction('simpler')} disabled={isGenerating || showWelcome}>
+          <span className="tutor-quick-btn-icon">💡</span> Simpler
         </button>
-        <button className="btn btn-sm" onClick={() => handleQuickAction('confused')} disabled={isGenerating}>
-          🤷 Confused
+        <button className="tutor-quick-btn" onClick={() => handleQuickAction('confused')} disabled={isGenerating || showWelcome}>
+          <span className="tutor-quick-btn-icon">🤷</span> Confused
         </button>
-        <button className="btn btn-sm" onClick={() => handleQuickAction('quiz')} disabled={isGenerating}>
-          ✅ Quiz Me
+        <button className="tutor-quick-btn" onClick={() => handleQuickAction('quiz')} disabled={isGenerating || showWelcome}>
+          <span className="tutor-quick-btn-icon">✅</span> Quiz Me
         </button>
       </div>
 
       {/* Input area */}
-      <form className="tutor-input" onSubmit={handleTextSubmit}>
-        <button
-          type="button"
-          className={`tutor-mic-button ${tutorState === 'listening' ? 'tutor-mic-active' : ''}`}
-          onClick={tutorState === 'listening' ? stopListening : startListening}
-          disabled={tutorState === 'processing' || tutorState === 'speaking' || tutorState === 'loading-models'}
-          style={{ '--level': audioLevel } as React.CSSProperties}
-        >
-          {tutorState === 'listening' ? '🔴' : '🎤'}
-        </button>
-        <input
-          type="text"
-          placeholder={quizMode ? "Answer the quiz question..." : "Ask a question or explain a concept..."}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={isGenerating || tutorState === 'listening' || tutorState === 'speaking'}
-        />
-        {isGenerating ? (
-          <button type="button" className="btn" onClick={handleCancel}>Stop</button>
-        ) : (
-          <button type="submit" className="btn btn-primary" disabled={!input.trim() || tutorState === 'listening' || tutorState === 'speaking'}>
-            Send
+      <div className="tutor-input-container">
+        <div className="tutor-input-wrapper">
+          <button
+            type="button"
+            className={`tutor-mic-button ${tutorState === 'listening' ? 'tutor-mic-active' : ''}`}
+            onClick={tutorState === 'listening' ? stopListening : startListening}
+            disabled={tutorState === 'processing' || tutorState === 'speaking' || tutorState === 'loading-models'}
+            title={tutorState === 'listening' ? 'Stop listening' : 'Start voice input'}
+          >
+            {tutorState === 'listening' ? '⏹️' : '🎤'}
           </button>
-        )}
-      </form>
+          <textarea
+            className="tutor-input"
+            placeholder={quizMode ? "Answer the quiz question..." : "Ask a question or explain a concept..."}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleTextSubmit();
+              }
+            }}
+            disabled={isGenerating || tutorState === 'listening' || tutorState === 'speaking'}
+            rows={1}
+          />
+          {isGenerating ? (
+            <button type="button" className="tutor-stop-button" onClick={handleCancel} title="Stop generation">
+              ⏹️
+            </button>
+          ) : (
+            <button 
+              type="submit" 
+              className="tutor-send-button" 
+              onClick={handleTextSubmit}
+              disabled={!input.trim() || tutorState === 'listening' || tutorState === 'speaking'}
+              title="Send message"
+            >
+              ➤
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Audio level indicator */}
+      {tutorState === 'listening' && (
+        <div className="tutor-audio-level">
+          <div className="tutor-audio-level-bar"></div>
+          <div className="tutor-audio-level-bar"></div>
+          <div className="tutor-audio-level-bar"></div>
+          <div className="tutor-audio-level-bar"></div>
+          <div className="tutor-audio-level-bar"></div>
+          <span style={{ marginLeft: '8px' }}>Listening...</span>
+        </div>
+      )}
     </div>
   );
 }
