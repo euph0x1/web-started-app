@@ -19,12 +19,8 @@ import {
   type CompactModelDef,
 } from '@runanywhere/web';
 
-import { LlamaCPP, VLMWorkerBridge } from '@runanywhere/web-llamacpp';
+import { LlamaCPP } from '@runanywhere/web-llamacpp';
 import { ONNX } from '@runanywhere/web-onnx';
-
-// Vite bundles the worker as a standalone JS chunk and returns its URL.
-// @ts-ignore — Vite-specific ?worker&url query
-import vlmWorkerUrl from './workers/vlm-worker?worker&url';
 
 // ---------------------------------------------------------------------------
 // Model catalog
@@ -50,16 +46,6 @@ const MODELS: CompactModelDef[] = [
     framework: LLMFramework.LlamaCpp,
     modality: ModelCategory.Language,
     memoryRequirement: 800_000_000,
-  },
-  // VLM — Liquid AI LFM2-VL 450M (vision + language)
-  {
-    id: 'lfm2-vl-450m-q4_0',
-    name: 'LFM2-VL 450M Q4_0',
-    repo: 'runanywhere/LFM2-VL-450M-GGUF',
-    files: ['LFM2-VL-450M-Q4_0.gguf', 'mmproj-LFM2-VL-450M-Q8_0.gguf'],
-    framework: LLMFramework.LlamaCpp,
-    modality: ModelCategory.Multimodal,
-    memoryRequirement: 500_000_000,
   },
   // STT (sherpa-onnx archive)
   {
@@ -116,15 +102,6 @@ export async function initSDK(): Promise<void> {
 
     // Step 3: Register model catalog
     RunAnywhere.registerModels(MODELS);
-
-    // Step 4: Wire up VLM worker
-    VLMWorkerBridge.shared.workerUrl = vlmWorkerUrl;
-    RunAnywhere.setVLMLoader({
-      get isInitialized() { return VLMWorkerBridge.shared.isInitialized; },
-      init: () => VLMWorkerBridge.shared.init(),
-      loadModel: (params) => VLMWorkerBridge.shared.loadModel(params),
-      unloadModel: () => VLMWorkerBridge.shared.unloadModel(),
-    });
   })();
 
   return _initPromise;
@@ -136,4 +113,4 @@ export function getAccelerationMode(): string | null {
 }
 
 // Re-export for convenience
-export { RunAnywhere, ModelManager, ModelCategory, VLMWorkerBridge };
+export { RunAnywhere, ModelManager, ModelCategory };

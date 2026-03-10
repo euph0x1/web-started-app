@@ -6,10 +6,10 @@ A minimal React + TypeScript starter app demonstrating **on-device AI in the bro
 
 | Tab | What it does |
 |-----|-------------|
-| **AI Tutor** | Interactive AI tutor that helps students understand concepts through voice or text, with automatic quiz generation and re-explanation features |
+| **AI Tutor** | Interactive AI tutor that helps students understand concepts through voice or text, with automatic quiz generation and re-explanation features. Conversation persists across tab navigation. |
 | **Chat** | Stream text from an on-device LLM (LFM2 350M) |
-| **Vision** | Point your camera and describe what the VLM sees (LFM2-VL 450M) |
 | **Voice** | Speak naturally — VAD detects speech, STT transcribes, LLM responds, TTS speaks back |
+| **Tools** | Function calling and structured JSON output with tool orchestration |
 
 ## Quick Start
 
@@ -23,6 +23,12 @@ Open [http://localhost:5173](http://localhost:5173). Models are downloaded on fi
 ## AI Tutor Feature
 
 The **AI Concept and Doubt Clearing Tutor** is a comprehensive educational tool that demonstrates the full power of the RunAnywhere Web SDK. It combines LLM, STT, TTS, and VAD to create a natural conversational learning experience.
+
+### Optimizations & Improvements
+
+- **Fast Response Times**: Optimized LLM parameters (150 max tokens, simplified context) for quicker responses
+- **Global State Management**: Conversation history persists across all tabs - switch between AI Tutor, Chat, Voice, and Tools without losing context
+- **Reduced Model Size**: Removed VLM/Vision model to improve loading times and reduce memory usage
 
 ### Key Features
 
@@ -82,17 +88,18 @@ const result = await VLMWorkerBridge.shared.process(rgbPixels, width, height, 'D
 ```
 src/
 ├── main.tsx              # React root
-├── App.tsx               # Tab navigation (Chat | Vision | Voice)
-├── runanywhere.ts        # SDK init + model catalog + VLM worker
-├── workers/
-│   └── vlm-worker.ts     # VLM Web Worker entry (2 lines)
+├── App.tsx               # Tab navigation (AI Tutor | Chat | Voice | Tools)
+├── runanywhere.ts        # SDK init + model catalog
+├── store/
+│   └── conversationStore.ts  # Global conversation state management
 ├── hooks/
-│   └── useModelLoader.ts # Shared model download/load hook
+│   ├── useModelLoader.ts     # Shared model download/load hook
+│   └── useConversationStore.ts  # Hook for global conversation state
 ├── components/
 │   ├── TutorTab.tsx       # AI Concept and Doubt Clearing Tutor
 │   ├── ChatTab.tsx        # LLM streaming chat
-│   ├── VisionTab.tsx      # Camera + VLM inference
 │   ├── VoiceTab.tsx       # Full voice pipeline
+│   ├── ToolsTab.tsx       # Function calling and tool orchestration
 │   └── ModelBanner.tsx    # Download progress UI
 └── styles/
     └── index.css          # Dark theme CSS

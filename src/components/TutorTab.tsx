@@ -3,15 +3,9 @@ import { ModelCategory, ModelManager, AudioCapture, AudioPlayback, SpeechActivit
 import { VAD } from '@runanywhere/web-onnx';
 import { TextGeneration } from '@runanywhere/web-llamacpp';
 import { useModelLoader } from '../hooks/useModelLoader';
+import { useConversationStore } from '../hooks/useConversationStore';
 import { ModelBanner } from './ModelBanner';
-
-interface Message {
-  role: 'user' | 'assistant' | 'system';
-  text: string;
-  timestamp: number;
-  isQuiz?: boolean;
-  isAudioPlaying?: boolean;
-}
+import type { Message } from '../store/conversationStore';
 
 type TutorState = 'idle' | 'loading-models' | 'listening' | 'processing' | 'speaking' | 'awaiting-quiz-answer';
 
@@ -32,19 +26,21 @@ export function TutorTab() {
   const ttsLoader = useModelLoader(ModelCategory.SpeechSynthesis, true);
   const vadLoader = useModelLoader(ModelCategory.Audio, true);
 
+  // Use global conversation store
+  const {
+    messages,
+    lastTopic,
+    addMessage,
+    updateMessage,
+    setLastTopic,
+    getConversationHistory,
+  } = useConversationStore();
+
   const [tutorState, setTutorState] = useState<TutorState>('idle');
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      text: 'Hi! I\'m your AI tutor. Ask me any concept or doubt you have, either by typing or speaking. I\'m here to help you understand!',
-      timestamp: Date.now(),
-    },
-  ]);
   const [input, setInput] = useState('');
   const [audioLevel, setAudioLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [lastExplanationTopic, setLastExplanationTopic] = useState<string>('');
   const [quizMode, setQuizMode] = useState(false);
   const [currentQuizTopic, setCurrentQuizTopic] = useState<string>('');
 
@@ -52,7 +48,6 @@ export function TutorTab() {
   const vadUnsub = useRef<(() => void) | null>(null);
   const cancelRef = useRef<(() => void) | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const conversationHistory = useRef<Array<{ role: string; content: string }>>([]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -95,8 +90,8 @@ export function TutorTab() {
     const trimmed = userText.trim();
     if (!trimmed) return;
 
-    // Add user message
-    setMessages((prev) => [...prev, { role: 'user', text: trimmed, timestamp: Date.now() }]);
+    // Add user message to global store
+    addMessage({ role: 'user', text: trimmed, timestamp: Date.now() });
     setIsGenerating(true);
     setTutorState('processing');
 
@@ -109,74 +104,56 @@ export function TutorTab() {
       // Build conversation context
       let systemPrompt = TUTOR_SYSTEM_PROMPT;
       
-      if (isConfused && lastExplanationTopic) {
-        systemPrompt += `\n\nThe student is confused about: ${lastExplanationTopic}. Re-explain this concept using a different approach - try a simpler explanation, a real-world analogy, or a step-by-step breakdown.`;
+      if (isConfused && lastTopic) {
+        systemPrompt += `\n\nThe student is confused about: ${lastTopic}. Re-explain this concept using a different approach - try a simpler explanation, a real-world analogy, or a step-by-step breakdown.`;
       } else if (isCheckUnderstanding) {
         systemPrompt += `\n\nCreate a short quiz question to check the student's understanding of the topic we've been discussing. Make it clear and concise.`;
         setQuizMode(true);
-        setCurrentQuizTopic(lastExplanationTopic || trimmed);
+        setCurrentQuizTopic(lastTopic || trimmed);
       }
 
-      // Add conversation history for context
-      conversationHistory.current.push({ role: 'user', content: trimmed });
+      // Get recent conversation history (last 6 messages for better performance)
+      const recentHistory = getConversationHistory(6);
       
-      // Keep only last 10 messages for context (to manage token usage)
-      const recentHistory = conversationHistory.current.slice(-10);
-      
-      // Build prompt with context
-      let contextualPrompt = trimmed;
-      if (recentHistory.length > 1) {
-        const historyText = recentHistory.slice(0, -1).map(msg => `${msg.role}: ${msg.content}`).join('\n');
-        contextualPrompt = `Previous conversation:\n${historyText}\n\nCurrent question: ${trimmed}`;
-      }
+      // Build simplified prompt - just use the current question without full history for speed
+      const contextualPrompt = trimmed;
 
-      // Generate response with streaming
+      // Generate response with streaming - optimized parameters for faster response
       const { stream, result, cancel } = await TextGeneration.generateStream(contextualPrompt, {
-        maxTokens: 300,
+        maxTokens: 150, // Reduced from 300 for faster responses
         temperature: 0.7,
         systemPrompt: systemPrompt,
       });
       cancelRef.current = cancel;
 
       // Add empty assistant message for streaming
-      const assistantIdx = messages.length + 1;
-      setMessages((prev) => [...prev, { role: 'assistant', text: '', timestamp: Date.now(), isQuiz: isCheckUnderstanding }]);
+      const assistantIdx = messages.length;
+      addMessage({ role: 'assistant', text: '', timestamp: Date.now(), isQuiz: isCheckUnderstanding });
 
       let accumulated = '';
       for await (const token of stream) {
         accumulated += token;
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[assistantIdx] = { 
-            role: 'assistant', 
-            text: accumulated, 
-            timestamp: Date.now(),
-            isQuiz: isCheckUnderstanding,
-          };
-          return updated;
+        updateMessage(assistantIdx, { 
+          role: 'assistant', 
+          text: accumulated, 
+          timestamp: Date.now(),
+          isQuiz: isCheckUnderstanding,
         });
       }
 
       const finalResult = await result;
       const finalText = finalResult.text || accumulated;
       
-      setMessages((prev) => {
-        const updated = [...prev];
-        updated[assistantIdx] = { 
-          role: 'assistant', 
-          text: finalText, 
-          timestamp: Date.now(),
-          isQuiz: isCheckUnderstanding,
-        };
-        return updated;
+      updateMessage(assistantIdx, { 
+        role: 'assistant', 
+        text: finalText, 
+        timestamp: Date.now(),
+        isQuiz: isCheckUnderstanding,
       });
-
-      // Update conversation history
-      conversationHistory.current.push({ role: 'assistant', content: finalText });
       
       // Remember the topic for re-explanations
       if (!isCheckUnderstanding && !isConfused) {
-        setLastExplanationTopic(trimmed);
+        setLastTopic(trimmed);
       }
 
       // Synthesize and play audio response
@@ -189,14 +166,14 @@ export function TutorTab() {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      setMessages((prev) => [...prev, { role: 'assistant', text: `Error: ${msg}`, timestamp: Date.now() }]);
+      addMessage({ role: 'assistant', text: `Error: ${msg}`, timestamp: Date.now() });
       setError(msg);
       setTutorState('idle');
     } finally {
       cancelRef.current = null;
       setIsGenerating(false);
     }
-  }, [messages.length, lastExplanationTopic]);
+  }, [messages.length, lastTopic, addMessage, updateMessage, setLastTopic, getConversationHistory]);
 
   // Synthesize text to speech and play
   const synthesizeAndPlay = useCallback(async (text: string) => {

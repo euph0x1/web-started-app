@@ -4,6 +4,11 @@
 
 The AI Tutor is an interactive learning assistant built with the RunAnywhere Web SDK. It uses on-device AI models to provide a natural, conversational learning experience that helps students understand academic concepts through explanations, examples, and quizzes.
 
+**New in this version:**
+- **Persistent Conversations**: Conversation history is maintained globally and persists when switching between tabs (AI Tutor, Chat, Voice, Tools)
+- **Faster Response Times**: Optimized LLM parameters for quicker responses (150 tokens vs 300)
+- **Reduced Memory Usage**: Removed VLM/Vision model, reducing total download from ~925 MB to ~425 MB
+
 ## Key Technologies
 
 - **LLM (Language Model)**: LFM2 350M for generating educational explanations
@@ -101,6 +106,15 @@ The tutor shows its current state with an icon and description:
 - 🔊 Speaking response... (playing audio)
 - ❓ Answer the quiz question above (awaiting quiz answer)
 
+### 9. Cross-Tab Persistence
+
+**NEW**: Your conversation with the AI Tutor persists across all tabs:
+- Start a conversation in AI Tutor
+- Switch to Chat, Voice, or Tools tab
+- Return to AI Tutor - your conversation is still there
+- All responses and context are maintained
+- No data is lost when navigating between features
+
 ## Usage Examples
 
 ### Example 1: Learning a New Concept
@@ -156,6 +170,8 @@ These models are cached in your browser and don't need to be downloaded again.
 - No internet connection needed after initial model download
 - No data is sent to external servers
 - Privacy is guaranteed - everything stays on your device
+- **Optimized for speed**: Responses now generate faster with reduced token limits
+- **Lighter memory footprint**: Vision/VLM model removed to improve performance
 
 ## Tips for Best Results
 
@@ -217,10 +233,11 @@ Student can ask follow-up
 
 ### Conversation Management
 - System prompt defines tutor behavior and personality
-- Conversation history maintained in memory
-- Last 10 messages used for context
+- Conversation history stored in global state (persists across tabs)
+- Last 6 messages used for context (optimized from 10 for better performance)
 - Topic tracking for re-explanation requests
 - Quiz mode state management
+- No data lost when switching between AI Tutor, Chat, Voice, or Tools tabs
 
 ## Code References
 
@@ -230,10 +247,23 @@ Student can ask follow-up
 - Implements complete tutor functionality
 
 ### Key Functions
-- `processUserInput()` - Handles LLM generation with context (src/components/TutorTab.tsx:94)
-- `synthesizeAndPlay()` - TTS synthesis and playback (src/components/TutorTab.tsx:202)
-- `startListening()` - VAD + STT integration (src/components/TutorTab.tsx:252)
-- `processSpeech()` - Speech-to-text processing (src/components/TutorTab.tsx:291)
+- `processUserInput()` - Handles LLM generation with context (src/components/TutorTab.tsx:90)
+- `synthesizeAndPlay()` - TTS synthesis and playback (src/components/TutorTab.tsx:178)
+- `startListening()` - VAD + STT integration (src/components/TutorTab.tsx:228)
+- `processSpeech()` - Speech-to-text processing (src/components/TutorTab.tsx:267)
+
+### Global State Management
+- **File**: `src/store/conversationStore.ts`
+- Singleton store for conversation history
+- Maintains messages across tab navigation
+- Provides subscribe/notify pattern for reactive updates
+- Exports `conversationStore` for global access
+
+### React Hook
+- **File**: `src/hooks/useConversationStore.ts`
+- Custom hook using `useSyncExternalStore`
+- Ensures components re-render on state changes
+- Provides convenient API for message management
 
 ### Styling
 - **File**: `src/styles/index.css`
