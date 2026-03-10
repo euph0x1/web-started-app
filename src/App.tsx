@@ -4,13 +4,14 @@ import { ChatTab } from './components/ChatTab';
 import { VisionTab } from './components/VisionTab';
 import { VoiceTab } from './components/VoiceTab';
 import { ToolsTab } from './components/ToolsTab';
+import { TutorTab } from './components/TutorTab';
 
-type Tab = 'chat' | 'vision' | 'voice' | 'tools';
+type Tab = 'tutor' | 'chat' | 'vision' | 'voice' | 'tools';
 
 export function App() {
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('chat');
+  const [activeTab, setActiveTab] = useState<Tab>('tutor');
 
   useEffect(() => {
     initSDK()
@@ -47,6 +48,9 @@ export function App() {
       </header>
 
       <nav className="tab-bar">
+        <button className={activeTab === 'tutor' ? 'active' : ''} onClick={() => setActiveTab('tutor')}>
+          🎓 AI Tutor
+        </button>
         <button className={activeTab === 'chat' ? 'active' : ''} onClick={() => setActiveTab('chat')}>
           💬 Chat
         </button>
@@ -62,6 +66,7 @@ export function App() {
       </nav>
 
       <main className="tab-content">
+        {activeTab === 'tutor' && <TutorTab />}
         {activeTab === 'chat' && <ChatTab />}
         {activeTab === 'vision' && <VisionTab />}
         {activeTab === 'voice' && <VoiceTab />}
