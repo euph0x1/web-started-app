@@ -6,6 +6,7 @@ A minimal React + TypeScript starter app demonstrating **on-device AI in the bro
 
 | Tab | What it does |
 |-----|-------------|
+| **AI Tutor** | Interactive AI tutor that helps students understand concepts through voice or text, with automatic quiz generation and re-explanation features |
 | **Chat** | Stream text from an on-device LLM (LFM2 350M) |
 | **Vision** | Point your camera and describe what the VLM sees (LFM2-VL 450M) |
 | **Voice** | Speak naturally — VAD detects speech, STT transcribes, LLM responds, TTS speaks back |
@@ -18,6 +19,38 @@ npm run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173). Models are downloaded on first use and cached in the browser's Origin Private File System (OPFS).
+
+## AI Tutor Feature
+
+The **AI Concept and Doubt Clearing Tutor** is a comprehensive educational tool that demonstrates the full power of the RunAnywhere Web SDK. It combines LLM, STT, TTS, and VAD to create a natural conversational learning experience.
+
+### Key Features
+
+- **Voice and Text Input**: Students can ask questions by typing or speaking
+- **Automatic Voice Detection (VAD)**: The system automatically detects when students start and stop speaking
+- **Speech-to-Text**: Converts spoken questions into text for processing
+- **Intelligent Tutoring**: Uses the on-device LLM to provide clear, step-by-step explanations with analogies and examples
+- **Text-to-Speech**: Reads explanations aloud so students can listen while learning
+- **Conversation Context**: Maintains chat history for follow-up questions and context-aware responses
+- **Quick Actions**: One-click buttons for common requests:
+  - "Give me an example"
+  - "Explain it more simply"
+  - "I don't understand" (triggers re-explanation with different approach)
+  - "Quiz me" (generates understanding check questions)
+- **Check Understanding**: Generates quiz questions to verify comprehension
+- **Adaptive Re-explanation**: If a student says "I don't understand", the tutor automatically re-explains using a different approach (simpler language, real-world analogy, or step-by-step breakdown)
+- **Visual Status Indicators**: Shows current state (listening, processing, speaking, awaiting quiz answer)
+
+### How It Works
+
+1. **Student asks a question** (by typing or speaking)
+2. **VAD detects speech** and captures the audio segment
+3. **STT transcribes** the question to text
+4. **LLM generates** a clear, educational explanation
+5. **TTS synthesizes** and plays the response audio
+6. **Student can ask follow-ups** with full conversation context
+
+All processing happens locally in the browser - no data leaves the device, ensuring complete privacy.
 
 ## How It Works
 
@@ -56,6 +89,7 @@ src/
 ├── hooks/
 │   └── useModelLoader.ts # Shared model download/load hook
 ├── components/
+│   ├── TutorTab.tsx       # AI Concept and Doubt Clearing Tutor
 │   ├── ChatTab.tsx        # LLM streaming chat
 │   ├── VisionTab.tsx      # Camera + VLM inference
 │   ├── VoiceTab.tsx       # Full voice pipeline
