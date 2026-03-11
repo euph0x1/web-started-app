@@ -152,33 +152,158 @@ User Input (Text or Voice)
 │  Audio Playback  │ ← Plays audio through speakers
 └──────────────────┘
 ```
+## Technical Architecture
 
-### File Structure
+The application uses the RunAnywhere Web SDK, which provides:
 
-```
-src/
-├── main.tsx                      # React entry point
-├── App.tsx                       # Tab navigation
-├── runanywhere.ts                # SDK initialization + model catalog
-│
-├── store/
-│   └── conversationStore.ts      # Global conversation state
-│
-├── hooks/
-│   ├── useModelLoader.ts        # Model download/load hook
-│   └── useConversationStore.ts # Global state hook
-│
-├── components/
-│   ├── TutorTab.tsx            # AI Tutor (main feature)
-│   ├── ChatTab.tsx             # Simple LLM chat
-│   ├── VoiceTab.tsx            # Voice conversation demo
-│   ├── ToolsTab.tsx            # Function calling demo
-│   └── ModelBanner.tsx         # Download progress UI
-│
-└── styles/
-    └── index.css               # All CSS styles
-```
+- **LLM (LFM2 350M):** On-device language model for generating responses
+- **STT (Whisper Tiny):** Speech-to-text for voice input transcription
+- **TTS (Piper):** Text-to-speech for voice output
+- **VAD (Silero):** Voice activity detection for automatic speech recognition
 
+All models run locally in the browser via WebAssembly, requiring no external API calls.
+
+## System Architecture
+┌───────────────────────────────────────────────────────────────┐
+│                        USER DEVICE                            │
+│                      (Browser / Laptop)                       │
+└───────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌───────────────────────────────────────────────────────────────┐
+│                        FRONTEND UI                            │
+│                         React App                             │
+│                                                               │
+│   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐         │
+│   │  AI Tutor   │   │    Chat     │   │    Voice    │         │
+│   │   Tab       │   │    Tab      │   │     Tab     │         │
+│   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘         │
+│          │                 │                 │                │
+│          └───────────┬─────┴─────┬───────────┘                │
+│                      ▼           ▼                            │
+│              Shared Conversation UI                           │
+└──────────────────────┬────────────────────────────────────────┘
+                       │
+                       ▼
+┌───────────────────────────────────────────────────────────────┐
+│                    GLOBAL STATE LAYER                         │
+│                                                               │
+│                conversationStore (Singleton)                  │
+│                                                               │
+│   messages[]      lastTopic        listeners                  │
+│   role            context          reactive updates           │
+│   text            timestamps                                  │
+│                                                               │
+│   Ensures conversation persists across tabs                   │
+└──────────────────────┬────────────────────────────────────────┘
+                       │
+                       ▼
+┌───────────────────────────────────────────────────────────────┐
+│                      AI SERVICE LAYER                         │
+│                                                               │
+│                    aiService.ts                               │
+│                                                               │
+│  Handles:                                                     │
+│  • Prompt building                                            │
+│  • Model selection                                            │
+│  • Streaming responses                                        │
+│  • Voice pipeline orchestration                               │
+└──────────────────────┬────────────────────────────────────────┘
+                       │
+                       ▼
+┌───────────────────────────────────────────────────────────────┐
+│                    RUNANYWHERE SDK LAYER                      │
+│                                                               │
+│  ┌──────────────────┐   ┌──────────────────┐                  │
+│  │ @runanywhere/web │   │@runanywhere/web  │                  │
+│  │ (Core Runtime)   │   │ -onnx            │                  │
+│  │                  │   │                  │                  │
+│  │ ModelManager     │   │ Speech Models    │                  │
+│  │ RunAnywhere      │   │ STT / TTS        │                  │
+│  │ EventBus         │   │ VAD              │                  │
+│  └─────────┬────────┘   └─────────┬────────┘                  │
+│            │                      │                            │
+│            ▼                      ▼                            │
+│      ┌──────────────────────────────────────┐                 │
+│      │ @runanywhere/web-llamacpp            │                 │
+│      │                                      │                 │
+│      │ LLM inference engine                 │
+│      │ Token streaming                      │
+│      │ WebGPU acceleration                  │
+│      └──────────────────────────────────────┘
+└──────────────────────┬────────────────────────────────────────┘
+                       │
+                       ▼
+┌───────────────────────────────────────────────────────────────┐
+│                    WASM RUNTIME LAYER                         │
+│                                                               │
+│        ┌──────────────────────────────┐                       │
+│        │ sherpa-onnx.wasm             │                       │
+│        │ Speech AI runtime            │                       │
+│        └──────────────────────────────┘                       │
+│                                                               │
+│        ┌──────────────────────────────┐                       │
+│        │ llama.cpp.wasm               │                       │
+│        │ LLM inference engine         │                       │
+│        └──────────────────────────────┘                       │
+│                                                               │
+│        Optional: WebGPU acceleration                          │
+└──────────────────────┬────────────────────────────────────────┘
+                       │
+                       ▼
+┌───────────────────────────────────────────────────────────────┐
+│                      AI MODEL LAYER                           │
+│                                                               │
+│   ┌─────────────┬─────────────┬─────────────┬─────────────┐   │
+│   │     LLM     │     STT     │     TTS     │     VAD     │   │
+│   │             │             │             │             │   │
+│   │ LFM2-350M   │ Whisper     │ Piper       │ Silero      │   │
+│   │ (GGUF)      │ Tiny (ONNX) │ (ONNX)      │ (ONNX)      │   │
+│   │ ~250 MB     │ ~105 MB     │ ~65 MB      │ ~5 MB       │   │
+│   └─────────────┴─────────────┴─────────────┴─────────────┘   │
+└──────────────────────┬────────────────────────────────────────┘
+                       │
+                       ▼
+┌───────────────────────────────────────────────────────────────┐
+│                  AI PROCESSING PIPELINE                       │
+│                                                               │
+│   Voice Input                                                 │
+│       │                                                       │
+│       ▼                                                       │
+│     VAD ──► detects speech start/end                          │
+│       │                                                       │
+│       ▼                                                       │
+│     STT ──► converts speech to text                           │
+│       │                                                       │
+│       ▼                                                       │
+│     LLM ──► generates explanation / answer                    │
+│       │                                                       │
+│       ▼                                                       │
+│     TTS ──► converts response text to audio                   │
+│       │                                                       │
+│       ▼                                                       │
+│     Speaker / Chat Output                                     │
+└───────────────────────────────────────────────────────────────┘
+                       │
+                       ▼
+┌───────────────────────────────────────────────────────────────┐
+│                        OFFLINE STORAGE                        │
+│                                                               │
+│               Browser OPFS (Origin Private FS)                │
+│                                                               │
+│   Cached Models:                                              │
+│   • LLM model (250MB)                                         │
+│   • STT model (105MB)                                         │
+│   • TTS model (65MB)                                          │
+│   • VAD model (5MB)                                           │
+│   • WASM runtimes                                             │
+│                                                               │
+│   Total storage ≈ 425 MB                                      │
+│                                                               │
+│                ✔ Works fully offline                          │
+│                ✔ No server required                           │
+│                ✔ Privacy preserving                           │
+└───────────────────────────────────────────────────────────────┘
 ---
 
 ## Target Audience
@@ -208,56 +333,6 @@ src/
 
 ---
 
-## Getting Started
+## Conclusion
 
-### Prerequisites
-- Chrome 96+ or Edge 96+ (recommended: 120+)
-- WebAssembly support
-- ~500 MB storage space
-
-### Installation
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd web-started-app
-
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Open in browser
-http://localhost:5173
-```
-
-### First-Time Setup
-1. Open the application
-2. Click on "AI Tutor" tab
-3. Models will download automatically (~425 MB)
-4. Once complete, start asking questions!
-
----
-
-## Browser Compatibility
-
-| Browser | Version | Status |
-|---------|---------|--------|
-| Chrome | 96+ | Fully supported |
-| Edge | 96+ | Fully supported |
-| Firefox | 119+ | Supported (no WebGPU) |
-| Safari | 17+ | Basic support |
-
----
-
-## License
-
-MIT License
-
----
-
-## Documentation
-
-- [RunAnywhere Documentation](https://docs.runanywhere.ai)
-- [AI Tutor User Guide](./AI_TUTOR_GUIDE.md)
+This project addresses critical gaps in modern education by providing an accessible, private, and offline-capable AI tutoring system. It democratizes access to personalized learning assistance and empowers students to learn at their own pace with instant feedback and support.
